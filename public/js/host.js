@@ -28,7 +28,7 @@ function storePin(value) {
 function showPinForm(message = '') {
   delete app.dataset.html;
   app.innerHTML = `
-    <header class="hero"><h1>Host controls</h1></header>
+    <header class="hero"><p class="eyebrow">Two Truths and a Lie</p><h1>Host <span class="glow">controls</span></h1></header>
     <form id="pin-form" class="card">
       <label for="pin">Host PIN</label>
       <input id="pin" name="pin" type="password" inputmode="numeric" autocomplete="off" required>
@@ -66,6 +66,7 @@ const STATUS_LABEL = { showing: 'Up next', voting: 'Voting open', revealed: 'Rev
 function render() {
   const { phase } = state;
   const body = phase === 'lobby' ? lobbyHtml() : phase === 'leaderboard' ? finalHtml() : playingHtml();
+  const screen = phase === 'playing' ? `play:${state.round.subject.id}:${state.round.status}` : phase;
   const changed = paint(
     app,
     `${body}
@@ -73,6 +74,7 @@ function render() {
       <button class="btn danger" data-action="reset" ${busy ? 'disabled' : ''}>Reset game</button>
       <p class="muted">Clears all players, entries and votes.</p>
     </section>`,
+    screen,
   );
   if (changed) scrollToReveal(app);
 }

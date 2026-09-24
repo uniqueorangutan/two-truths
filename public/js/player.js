@@ -60,19 +60,20 @@ function render() {
   if (!you) return renderForm('join', joinHtml());
   if (phase === 'lobby' && (editing || !you.entry)) return renderForm('entry', entryHtml(you));
   app.dataset.form = '';
-  if (phase === 'lobby') return paint(app, frame(lobbyHtml(you)));
+  if (phase === 'lobby') return paint(app, frame(lobbyHtml(you)), 'lobby');
   if (phase === 'leaderboard') {
-    if (paint(app, frame(finalHtml()))) scrollToReveal(app);
+    if (paint(app, frame(finalHtml()), 'leaderboard')) scrollToReveal(app);
     return;
   }
-  paint(app, frame(roundHtml()));
+  const r = state.round;
+  paint(app, frame(roundHtml()), r ? `round:${r.subject.id}:${r.status}:${r.myVote !== null}` : 'round');
 }
 
 // Forms are drawn once and then left alone while polling, so typing isn't interrupted.
 function renderForm(name, html) {
   if (app.dataset.form === name) return;
   app.dataset.form = name;
-  paint(app, html);
+  paint(app, html, `form:${name}`);
   if (name === 'entry') updateCounters();
   app.querySelector('input, textarea')?.focus({ preventScroll: true });
 }
@@ -86,7 +87,7 @@ function frame(body) {
 function joinHtml() {
   const started = state.phase !== 'lobby';
   return `
-    <header class="hero"><h1>Two Truths<br>and a Lie</h1></header>
+    <header class="hero"><h1>Two Truths<br>and a <span class="glow">Lie</span></h1></header>
     ${notice ? `<p class="note">${esc(notice)}</p>` : ''}
     ${started ? '<p class="note">The game has already started. You can still join and vote.</p>' : ''}
     <form id="join-form" class="card">

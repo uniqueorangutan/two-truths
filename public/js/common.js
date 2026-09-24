@@ -59,10 +59,18 @@ export function toast(message, kind = 'error') {
 }
 
 // Replaces container content only when the markup changed, so polling doesn't flicker.
-export function paint(container, html) {
+// When `screen` differs from the last one painted, the new content rises in.
+export function paint(container, html, screen) {
   if (container.dataset.html === html) return false;
   container.innerHTML = html;
   container.dataset.html = html;
+  if (screen !== undefined && container.dataset.screen !== screen) {
+    container.dataset.screen = screen;
+    [...container.children].forEach((el, i) => {
+      el.classList.add('rise');
+      el.style.setProperty('--i', Math.min(i, 8));
+    });
+  }
   return true;
 }
 
