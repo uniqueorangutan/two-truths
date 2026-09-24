@@ -1,6 +1,6 @@
 // The only writer of the `game` key.
 import { store, getGame, getAllPlayers, getVotes, newGame } from '../lib/store.js';
-import { shuffle, hasEntry, current, buildResult, buildLeaderboard } from '../lib/game.js';
+import { shuffle, hasEntry, current, buildResult, buildLeaderboard, revealOrder } from '../lib/game.js';
 import { json, error, readBody, checkHostPin } from '../lib/http.js';
 
 export default async (req) => {
@@ -63,7 +63,15 @@ export default async (req) => {
       if (game.phase !== 'playing') return error('Start the game first.', 409);
       const players = (await getAllPlayers(s)).filter((p) => p.gameId === game.gameId);
       game.leaderboard = buildLeaderboard(game, players);
+      game.leaderboardStep = 0; // nothing revealed yet: the host reveals from last place up
       game.phase = 'leaderboard';
+      break;
+    }
+    case 'revealNext': {
+      if (game.phase !== 'leaderboard') return error('Show the leaderboard first.', 409);
+      const steps = revealOrder(game.leaderboard).length;
+      if ((game.leaderboardStep ?? steps) >= steps) return error('Everyone has been revealed.', 409);
+      game.leaderboardStep++;
       break;
     }
     case 'reset': {

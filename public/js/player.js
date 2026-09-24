@@ -1,4 +1,4 @@
-import { api, esc, startPolling, toast, paint, plural, statementsHtml, resultHtml, leaderboardHtml, LETTERS } from './common.js';
+import { api, esc, startPolling, toast, paint, plural, statementsHtml, resultHtml, leaderboardHtml, confettiWatcher, scrollToReveal, ordinal, LETTERS } from './common.js';
 
 const STORAGE_KEY = 'two-truths-player';
 const MAX_LEN = 150;
@@ -11,6 +11,7 @@ let selected = null; // statement picked but not yet locked in
 let selectedFor = null; // subject ID that `selected` belongs to
 let notice = '';
 let busy = false;
+const watchConfetti = confettiWatcher();
 
 function load() {
   try {
@@ -38,6 +39,7 @@ async function refresh() {
   // otherwise a poll sent just before joining looks like "player not found" and wipes the new ID.
   if (requestNo !== latestRequest || askedFor !== (saved?.playerId ?? '')) return;
   state = next;
+  watchConfetti(state.leaderboard);
   if (saved && !state.you) {
     save(null);
     editing = false;
@@ -59,7 +61,10 @@ function render() {
   if (phase === 'lobby' && (editing || !you.entry)) return renderForm('entry', entryHtml(you));
   app.dataset.form = '';
   if (phase === 'lobby') return paint(app, frame(lobbyHtml(you)));
-  if (phase === 'leaderboard') return paint(app, frame(finalHtml()));
+  if (phase === 'leaderboard') {
+    if (paint(app, frame(finalHtml()))) scrollToReveal(app);
+    return;
+  }
   paint(app, frame(roundHtml()));
 }
 
@@ -187,18 +192,18 @@ function roundHtml() {
 }
 
 function finalHtml() {
-  const me = state.leaderboard?.find((r) => r.id === state.you.id);
-  return `<header><h1>Final scores</h1>
-    ${me ? `<p class="lead">You finished ${ordinal(me.rank)} with ${plural(me.score, 'point')}.</p>` : ''}</header>
-    ${leaderboardHtml(state.leaderboard, state.you.id)}
-    <p class="muted center">+1 for each lie you spotted, +1 for each person you fooled.</p>`;
+  const board = state.leaderboard;
+  const me = board.rows.find((r) => r.id === state.you.id);
+  let lead;
+  const joint = me && board.rows.filter((r) => r.rank === me.rank).length > 1 ? 'joint ' : '';
+  if (me) lead = me.rank === 1 && !joint ? 'You won! 🏆' : `You finished ${joint}${ordinal(me.rank)} with ${plural(me.score, 'point')}.`;
+  else if (board.step === 0) lead = 'The host is about to reveal the scores, from last place up…';
+  else lead = 'Still waiting for your name…';
+  return `<header><h1>${board.done ? 'Final scores' : 'And the scores are…'}</h1>
+    <p class="lead">${lead}</p></header>
+    ${leaderboardHtml(board, state.you.id)}
+    ${board.done ? '<p class="muted center">+1 for each lie you spotted, +1 for each person you fooled.</p>' : ''}`;
 }
-
-const ordinal = (n) => {
-  const s = ['th', 'st', 'nd', 'rd'];
-  const v = n % 100;
-  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
-};
 
 function updateCounters() {
   app.querySelectorAll('.counter').forEach((el) => {

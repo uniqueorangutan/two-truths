@@ -65,3 +65,24 @@ export function buildLeaderboard(game, players) {
   for (const r of list) r.rank = 1 + list.filter((o) => o.score > r.score).length;
   return list;
 }
+
+// Ranks in reveal order: last place first, winner last. Tied players share a rank, so they reveal together.
+export const revealOrder = (rows) => [...new Set(rows.map((r) => r.rank))].sort((a, b) => b - a);
+
+// The leaderboard as far as the host has revealed it. Unrevealed rows carry no name or score,
+// so nothing can be spotted early in the network traffic.
+export function publicLeaderboard(game) {
+  if (game.phase !== 'leaderboard' || !game.leaderboard) return null;
+  const rows = game.leaderboard;
+  const order = revealOrder(rows);
+  const step = Math.min(game.leaderboardStep ?? order.length, order.length);
+  const shown = new Set(order.slice(0, step));
+  const latest = step ? order[step - 1] : null;
+  return {
+    step,
+    steps: order.length,
+    done: step === order.length,
+    nextRank: step < order.length ? order[step] : null,
+    rows: rows.map((r) => (shown.has(r.rank) ? { ...r, latest: r.rank === latest } : { hidden: true })),
+  };
+}

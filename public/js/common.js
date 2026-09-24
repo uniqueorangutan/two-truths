@@ -101,14 +101,119 @@ export function resultHtml(round, youId) {
     .join('')}</ol>`;
 }
 
-export function leaderboardHtml(rows, youId) {
-  if (!rows?.length) return '<p class="muted">No scores yet.</p>';
-  return `<table class="leaderboard">
-    <thead><tr><th>#</th><th>Name</th><th title="Correct guesses">Guessed</th><th title="Players fooled">Fooled</th><th>Points</th></tr></thead>
-    <tbody>${rows
-      .map(
-        (r) => `<tr class="${r.rank === 1 ? 'first' : ''} ${r.id === youId ? 'you' : ''}">
-        <td class="rank">${rows.filter((o) => o.rank === r.rank).length > 1 ? '=' : ''}${r.rank}</td><td>${esc(r.name)}</td><td>${r.correct}</td><td>${r.fooled}</td><td class="score">${r.score}</td></tr>`,
-      )
-      .join('')}</tbody></table>`;
+export const ordinal = (n) => {
+  const s = ['th', 'st', 'nd', 'rd'];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+};
+
+// Reveals that have already played their animation, so a repaint doesn't replay them.
+const animatedReveals = new Set();
+
+// `board` comes from the server with unrevealed rows as { hidden: true }, in final order,
+// so the countdown fills in from the bottom. Rows revealed by the latest tap carry `latest`.
+export function leaderboardHtml(board, youId) {
+  if (!board?.rows.length) return '<p class="muted">No scores yet.</p>';
+  const shown = board.rows.filter((r) => !r.hidden);
+  const revealKey = `${board.step}:${shown.filter((r) => r.latest).map((r) => r.id).join()}`;
+  const animate = !animatedReveals.has(revealKey);
+  animatedReveals.add(revealKey);
+  const tied = (rank) => shown.filter((o) => o.rank === rank).length > 1;
+  const rows = board.rows
+    .map((r) => {
+      if (r.hidden) {
+        return `<li class="row hidden-row" aria-label="Not revealed yet">
+          <span class="rank">?</span><span class="name">??????</span>
+          <span class="stat"></span><span class="stat"></span><span class="score">?</span></li>`;
+      }
+      const cls = ['row', r.rank === 1 ? 'first' : '', r.id === youId ? 'you' : '', r.latest ? 'latest' : '', r.latest && animate ? 'animate' : ''].join(' ');
+      return `<li class="${cls}">
+        <span class="rank">${r.rank === 1 ? '<span class="trophy" aria-hidden="true">🏆</span>' : ''}${tied(r.rank) ? '=' : ''}${r.rank}</span>
+        <span class="name">${esc(r.name)}${r.id === youId ? ' <span class="you-tag">You</span>' : ''}</span>
+        <span class="stat">${r.correct}</span><span class="stat">${r.fooled}</span>
+        <span class="score">${r.score}</span></li>`;
+    })
+    .join('');
+  return `<ol class="board">
+    <li class="board-head" aria-hidden="true"><span>#</span><span>Name</span>
+      <span class="stat" title="Lies spotted">Spotted</span><span class="stat" title="Players fooled">Fooled</span><span>Pts</span></li>
+    ${rows}</ol>`;
+}
+
+// Brings a freshly revealed row into view (it may be far down the list on a big team).
+export function scrollToReveal(container) {
+  const row = container.querySelector('.board .row.animate');
+  if (!row) return;
+  const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  row.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
+}
+
+// Fires confetti when this screen sees the winner revealed, but not on a reload after the fact.
+export function confettiWatcher() {
+  let sawCountdown = false;
+  return (board) => {
+    if (!board) return;
+    if (!board.done) sawCountdown = true;
+    else if (sawCountdown) {
+      sawCountdown = false;
+      setTimeout(confetti, 450); // let the winner's row land first
+    }
+  };
+}
+
+export function confetti() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const canvas = document.createElement('canvas');
+  canvas.className = 'confetti';
+  canvas.setAttribute('aria-hidden', 'true');
+  document.body.append(canvas);
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = innerWidth;
+  const h = innerHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  ctx.scale(dpr, dpr);
+
+  const colours = ['#5b3df5', '#8b74ff', '#ff7d88', '#5fd69c', '#f0b64a', '#ffd84d'];
+  // Two cannons, one from each bottom corner, aimed up and inwards.
+  const pieces = Array.from({ length: 180 }, (_, i) => {
+    const left = i % 2 === 0;
+    return {
+      x: left ? 0 : w,
+      y: h,
+      vx: (left ? 1 : -1) * (3 + Math.random() * 9) * (w / 900 + 0.5),
+      vy: -(11 + Math.random() * 13) * (h / 900 + 0.4),
+      angle: Math.random() * Math.PI,
+      spin: (Math.random() - 0.5) * 0.35,
+      size: 6 + Math.random() * 7,
+      colour: colours[i % colours.length],
+      delay: Math.random() * 250,
+    };
+  });
+
+  const DURATION = 4200;
+  const start = performance.now();
+  const frame = (now) => {
+    const t = now - start;
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalAlpha = Math.min(1, Math.max(0, (DURATION - t) / 800));
+    for (const p of pieces) {
+      if (t < p.delay) continue;
+      p.vy += 0.32;
+      p.vx *= 0.985;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.angle += p.spin;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.fillStyle = p.colour;
+      ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+      ctx.restore();
+    }
+    if (t < DURATION) requestAnimationFrame(frame);
+    else canvas.remove();
+  };
+  requestAnimationFrame(frame);
 }

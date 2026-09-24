@@ -1,6 +1,6 @@
 // Player poll: everything one player's screen needs. Never includes the lie before reveal.
 import { store, getGame, getPlayer, voteKey } from '../lib/store.js';
-import { publicRound, hasEntry } from '../lib/game.js';
+import { publicRound, publicLeaderboard, hasEntry } from '../lib/game.js';
 import { json } from '../lib/http.js';
 
 export default async (req) => {
@@ -27,7 +27,7 @@ export default async (req) => {
       inGame: game.order.some((o) => o.id === you.id),
     },
     round: round && { ...round, isYou: round.subject.id === you?.id, myVote },
-    leaderboard: game.phase === 'leaderboard' ? game.leaderboard : null,
+    leaderboard: publicLeaderboard(game),
   });
 };
 

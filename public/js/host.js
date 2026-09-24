@@ -1,4 +1,4 @@
-import { api, esc, startPolling, toast, paint, plural, statementsHtml, resultHtml, leaderboardHtml } from './common.js';
+import { api, esc, startPolling, toast, paint, plural, statementsHtml, resultHtml, leaderboardHtml, confettiWatcher, scrollToReveal, ordinal } from './common.js';
 
 const PIN_KEY = 'two-truths-host-pin';
 const app = document.getElementById('app');
@@ -7,6 +7,7 @@ let pin = readPin();
 let state = null;
 let busy = false;
 let poll = null;
+const watchConfetti = confettiWatcher();
 
 function readPin() {
   try {
@@ -49,6 +50,7 @@ async function refresh() {
     }
     throw err;
   }
+  watchConfetti(state.leaderboard);
   render();
 }
 
@@ -64,7 +66,7 @@ const STATUS_LABEL = { showing: 'Up next', voting: 'Voting open', revealed: 'Rev
 function render() {
   const { phase } = state;
   const body = phase === 'lobby' ? lobbyHtml() : phase === 'leaderboard' ? finalHtml() : playingHtml();
-  paint(
+  const changed = paint(
     app,
     `${body}
     <section class="danger-zone">
@@ -72,6 +74,7 @@ function render() {
       <p class="muted">Clears all players, entries and votes.</p>
     </section>`,
   );
+  if (changed) scrollToReveal(app);
 }
 
 function lobbyHtml() {
@@ -155,11 +158,16 @@ function playingHtml() {
 }
 
 function finalHtml() {
+  const board = state.leaderboard;
+  const d = busy ? 'disabled' : '';
+  const next = board.nextRank === 1 ? 'the winner' : board.nextRank ? `${ordinal(board.nextRank)} place` : '';
   return `
-    <header><p class="eyebrow">Host · Game over</p><h1>Leaderboard</h1></header>
-    ${leaderboardHtml(state.leaderboard)}
-    <p class="muted center">+1 for each lie spotted, +1 for each person fooled.</p>
-    <button class="btn" data-action="back" ${busy ? 'disabled' : ''}>← Back to the last round</button>`;
+    <header><p class="eyebrow">Host · Game over</p><h1>${board.done ? 'Final scores' : 'And the scores are…'}</h1></header>
+    ${leaderboardHtml(board)}
+    ${board.done
+      ? '<p class="muted center">+1 for each lie spotted, +1 for each person fooled.</p>'
+      : `<div class="sticky-action"><button class="btn primary big ${board.nextRank === 1 ? 'drum' : ''}" data-action="revealNext" ${d}>Reveal ${next}</button></div>`}
+    <button class="btn" data-action="back" ${d}>← Back to the last round</button>`;
 }
 
 // ---------- actions ----------

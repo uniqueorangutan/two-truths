@@ -1,6 +1,6 @@
 // Host poll. Like the player view, it never includes the lie before reveal.
 import { store, getGame, getAllPlayers, getVoterIds } from '../lib/store.js';
-import { publicRound, hasEntry } from '../lib/game.js';
+import { publicRound, publicLeaderboard, hasEntry } from '../lib/game.js';
 import { json, checkHostPin } from '../lib/http.js';
 
 export default async (req) => {
@@ -34,7 +34,7 @@ export default async (req) => {
     })),
     round,
     votes,
-    leaderboard: game.phase === 'leaderboard' ? game.leaderboard : null,
+    leaderboard: publicLeaderboard(game),
   });
 };
 
