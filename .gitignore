@@ -1,0 +1,6 @@
+# Local Netlify folder
+.netlify
+node_modules
+.env
+# Fake player IDs written by the seed script
+scripts/.seed-players.json
