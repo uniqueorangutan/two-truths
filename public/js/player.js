@@ -28,8 +28,16 @@ function save(value) {
   }
 }
 
+let latestRequest = 0;
+
 async function refresh() {
-  state = await api(`/api/state?playerId=${encodeURIComponent(saved?.playerId ?? '')}`);
+  const requestNo = ++latestRequest;
+  const askedFor = saved?.playerId ?? '';
+  const next = await api(`/api/state?playerId=${encodeURIComponent(askedFor)}`);
+  // Ignore responses overtaken by a newer poll, or requested before we joined:
+  // otherwise a poll sent just before joining looks like "player not found" and wipes the new ID.
+  if (requestNo !== latestRequest || askedFor !== (saved?.playerId ?? '')) return;
+  state = next;
   if (saved && !state.you) {
     save(null);
     editing = false;
